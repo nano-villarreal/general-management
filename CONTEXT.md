@@ -12,7 +12,9 @@ present and classify engagement (working / idle / mixed / empty), flags
 phone use and safety anomalies, and logs every check — not just the ones
 worth alerting on. A viewer UI shows the running log, a same-day summary,
 and lets an operator annotate reports (two independent channels — see §4) to
-improve future accuracy.
+improve future accuracy. A separate **Labeling** tab lets an operator draw
+bounding boxes on stored frames and export them as a YOLO training dataset
+(see §6a).
 
 This is an extraction of the camera-reporting slice of a larger internal
 ops dashboard built for a different business. It has **no dependency** on
@@ -73,6 +75,7 @@ A `camera_reports` document looks like:
   yoloDetection,                    // { personCount, phoneCount, phonesNearPerson } | null
   referenceNote,                    // operator annotation — see below
   engagementNote,                   // operator correction — see below
+  labelBoxes, labeledAt,            // bounding boxes from the Labeling tab — see §6a
   changedSinceLastCheck, frameId, timestamp,
 }
 ```
@@ -94,6 +97,13 @@ All routes require a valid session (`requireAuth`) unless noted.
   — correct a wrong engagement/phone-use call
 - `POST /api/camera-reports/:id/reclassify` — re-run classification on an
   existing report's stored frame under the current prompt/context
+
+**Labeling**
+- `GET /api/labeling/frames?filter=all|labeled|unlabeled&limit=&camera=` —
+  reports that still have a stored frame, plus labeled/total counts
+- `PUT /api/camera-reports/:id/label` (body `{boxes}`) — replace a frame's
+  boxes; an empty array clears the label
+- `GET /api/labeling/export` — streams a YOLO dataset zip
 
 **Alerts**
 - `GET /api/alerts` — merged idle-flag + camera-anomaly feed
@@ -143,7 +153,7 @@ device the camera's LAN RTSP URL — it is not per-camera the way
 bucket) and referenced by `frameId`, so a past classification can be audited
 or reclassified later. Frames older than `FRAME_RETENTION_DAYS` (default 30)
 are pruned automatically (once a day) unless the report has a
-`referenceNote` annotation.
+`referenceNote` annotation or `labelBoxes`.
 
 **Two independent annotation channels, easy to conflate — don't:**
 
@@ -185,6 +195,33 @@ human confirms once, the system reuses a stored signature after). If you
 want to add per-person tracking, get legal sign-off for your jurisdiction
 first — don't assume manual-looking review makes it a non-issue if a
 signature is stored and reused.
+
+## 6a. Labeling (bounding boxes → YOLO dataset)
+
+The Labeling tab (`client/src/components/LabelingPanel.jsx`) shows stored
+frames; the operator drags boxes on a frame and tags each box with one or
+more classes: `person`, `phone`, `engaged`, `disengaged`, `sitting`,
+`standing`. `engaged`/`disengaged` and `sitting`/`standing` are mutually
+exclusive on a box (enforced client- and server-side). Boxes are stored on
+the report as `labelBoxes: [{x1,y1,x2,y2,classes}]` in normalized 0–1
+coordinates.
+
+Multi-class boxes exist so each person is drawn once. YOLO itself is
+single-class per box, so the export writes **one line per (box, class)
+pair** — a box tagged person+engaged+sitting becomes three identically-
+placed lines. That's fine for training, but note that at inference a stock
+YOLO head with class-agnostic NMS would keep only one of those overlapping
+detections; run NMS per class (Ultralytics' default) if you train on this.
+The class list lives in two places — `LABEL_CLASSES` in `server.js` and
+`CLASSES` in `LabelingPanel.jsx` — and the order of `LABEL_CLASSES` is the
+YOLO class index, so only ever append to it.
+
+Export (`GET /api/labeling/export`) streams a zip with `images/{train,val}`,
+`labels/{train,val}`, `classes.txt` and `dataset.yaml`; every 6th labeled
+frame (oldest first) goes to `val`. The trained model is **not** wired back
+in automatically — `lib/yoloDetect.js` still runs the stock COCO model and
+hard-codes COCO class ids 0/67, so swapping in a custom model needs those
+ids and the confidence thresholds (§7) updated too.
 
 ## 7. The local YOLO pre-check (`lib/yoloDetect.js`)
 

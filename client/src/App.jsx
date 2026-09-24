@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { api } from './api';
 import CameraReportsPanel from './components/CameraReportsPanel';
+import LabelingPanel from './components/LabelingPanel';
+
+const TABS = [
+  { key: 'reports', label: 'Reports' },
+  { key: 'labeling', label: 'Labeling' },
+];
+
+function tabFromHash() {
+  const key = window.location.hash.replace('#', '');
+  return TABS.some(t => t.key === key) ? key : 'reports';
+}
 
 function LoginPage({ onLoggedIn }) {
   const [password, setPassword] = useState('');
@@ -48,9 +59,13 @@ function LoginPage({ onLoggedIn }) {
 
 export default function App() {
   const [me, setMe] = useState(null);
+  const [tab, setTab] = useState(tabFromHash);
 
   useEffect(() => {
     api.me().then(setMe);
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
   async function logout() {
@@ -64,14 +79,21 @@ export default function App() {
   return (
     <div className="app-layout">
       <div className="topbar">
-        <div className="topbar-logo">Camera Reports</div>
+        <div className="topbar-left">
+          <div className="topbar-logo">Camera Reports</div>
+          <nav className="tabs">
+            {TABS.map(t => (
+              <a key={t.key} href={`#${t.key}`} className={`tab${tab === t.key ? ' active' : ''}`}>{t.label}</a>
+            ))}
+          </nav>
+        </div>
         <div className="topbar-right">
           <button className="logout-btn" onClick={logout}>Logout</button>
         </div>
       </div>
       <div className="main-content">
         <div className="solo-panel">
-          <CameraReportsPanel />
+          {tab === 'labeling' ? <LabelingPanel /> : <CameraReportsPanel />}
         </div>
       </div>
     </div>

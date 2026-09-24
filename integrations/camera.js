@@ -77,7 +77,8 @@ const ffmpegPath = process.env.FFMPEG_PATH || require('ffmpeg-static');
 // reference in server.js) and so visualCompletionPct (below) has something
 // to compare against. Frames older than FRAME_RETENTION_DAYS are pruned
 // (see cleanupOldFrames) — kept unconditionally otherwise, this would grow
-// unbounded. Annotated (referenceNote set) frames are exempt from cleanup,
+// unbounded. Annotated (referenceNote set) and box-labeled (labelBoxes set,
+// see the Labeling tab) frames are exempt from cleanup,
 // since deleting one of the labeled examples would silently degrade the
 // comparison set.
 const FRAME_RETENTION_DAYS = parseInt(process.env.FRAME_RETENTION_DAYS) || 30;
@@ -113,7 +114,7 @@ async function cleanupOldFrames(db) {
   try {
     const cutoff = new Date(Date.now() - FRAME_RETENTION_DAYS * 24 * 60 * 60 * 1000);
     const old = await db.collection('camera_reports')
-      .find({ timestamp: { $lt: cutoff }, frameId: { $ne: null }, referenceNote: null })
+      .find({ timestamp: { $lt: cutoff }, frameId: { $ne: null }, referenceNote: null, labelBoxes: null })
       .project({ frameId: 1 })
       .toArray();
     if (!old.length) return;

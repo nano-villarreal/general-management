@@ -26,6 +26,12 @@ export const api = {
   }),
   unmarkEngagement: (id) => apiFetch(`/api/camera-reports/${id}/mark-engagement`, { method: 'DELETE' }),
 
+  labelFrames: (filter = 'all', limit = 200) => apiFetch(`/api/labeling/frames?filter=${filter}&limit=${limit}`),
+  saveLabel: (id, boxes) => apiFetch(`/api/camera-reports/${id}/label`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ boxes }),
+  }),
+  labelExportUrl: '/api/labeling/export',
+
   alerts: (limit = 40) => apiFetch(`/api/alerts?limit=${limit}`),
   idleFlags: (limit = 20) => apiFetch(`/api/idle-flags?limit=${limit}`),
 
