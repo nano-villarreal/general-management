@@ -1,0 +1,275 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0a0a0a;
+  --bg1:       #111111;
+  --bg2:       #181818;
+  --bg3:       #222222;
+  --border:    #2a2a2a;
+  --border2:   #333333;
+  --text:      #e8e8e8;
+  --text2:     #aaaaaa;
+  --text3:     #666666;
+  --orange:    #ff6600;
+  --orange2:   #ff8833;
+  --amber:     #ffaa00;
+  --green:     #00cc44;
+  --red:       #ff3333;
+  --blue:      #0088ff;
+  --cyan:      #00cccc;
+  --font:      'IBM Plex Mono', 'JetBrains Mono', 'Courier New', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+.clamp1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tag-blue { color: var(--blue); }
+
+/* ── Panel ──────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.panel-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--orange);
+}
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+}
+
+/* ── Badge ──────────────────────────────────────────────────────────────── */
+.badge-green   { background: #00cc4422; color: var(--green);  border: 1px solid #00cc4444; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge-red     { background: #ff333322; color: var(--red);    border: 1px solid #ff333344; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge-amber   { background: #ffaa0022; color: var(--amber);  border: 1px solid #ffaa0044; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge-blue    { background: #0088ff22; color: var(--blue);   border: 1px solid #0088ff44; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+.badge-dim     { background: #33333322; color: var(--text3);  border: 1px solid #33333344; padding: 1px 5px; border-radius: 2px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Button ─────────────────────────────────────────────────────────────── */
+.btn {
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 4px 10px;
+  border: 1px solid var(--border2);
+  background: var(--bg2);
+  color: var(--text2);
+  cursor: pointer;
+  transition: all 0.1s;
+}
+.btn:hover { border-color: var(--orange); color: var(--orange); }
+.btn.active { background: var(--orange); border-color: var(--orange); color: #000; }
+
+/* ── Camera report rows (two-line: compact meta + wrapped note) ────────────
+   A plain table forces the note text into one narrow column slice — this
+   instead gives the note the full row width on its own line. */
+.cam-report-row {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.cam-report-row:last-child { border-bottom: none; }
+.cam-report-row:hover { background: var(--bg2); }
+.cam-report-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+.cam-report-note {
+  font-size: 10px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Login ──────────────────────────────────────────────────────────────── */
+.login-page {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-box {
+  width: 340px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  padding: 32px;
+}
+.login-logo {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--orange);
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.login-subtitle {
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 28px;
+}
+.login-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text3);
+  margin-bottom: 6px;
+}
+.login-input {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 13px;
+  padding: 8px 10px;
+  background: var(--bg2);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  outline: none;
+  margin-bottom: 20px;
+}
+.login-input:focus { border-color: var(--orange); }
+.login-btn {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 10px;
+  background: var(--orange);
+  border: none;
+  color: #000;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.login-btn:hover { background: var(--orange2); }
+.login-error {
+  font-size: 10px;
+  color: var(--red);
+  margin-top: 10px;
+  text-align: center;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────────── */
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg1);
+  border-bottom: 2px solid var(--orange);
+  padding: 0 12px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.topbar-logo {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--orange);
+  letter-spacing: 0.05em;
+}
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.logout-btn {
+  font-family: var(--font);
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--text3);
+  cursor: pointer;
+}
+.logout-btn:hover { color: var(--red); border-color: var(--red); }
+
+.main-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.solo-panel {
+  height: 100%;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Loading / Empty ────────────────────────────────────────────────────── */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--text3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ── Mobile ─────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app-layout { height: auto; min-height: 100vh; overflow: visible; }
+  .main-content { overflow: visible; }
+  .solo-panel { height: auto; min-height: 100vh; }
+  .cam-report-meta { flex-wrap: wrap; row-gap: 4px; }
+  .cam-report-actions { margin-left: 0 !important; width: 100%; margin-top: 4px; }
+}

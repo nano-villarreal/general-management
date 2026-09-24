@@ -1,0 +1,79 @@
+const http = require('http');
+const https = require('https');
+const { spawn, execFile } = require('child_process');
+
+const CAMERA_NAME     = {{CAMERA_NAME}};
+const RTSP_URL        = {{RTSP_URL}};
+const SECRET          = {{SECRET}};
+const REGISTER_URL    = {{REGISTER_URL}};
+const PORT            = 8080;
+const CLOUDFLARED_BIN = process.env.HOME + '/cloudflared';
+
+function grabSnapshot(cb) {
+  execFile('ffmpeg', [
+    '-y', '-rtsp_transport', 'tcp', '-i', RTSP_URL,
+    '-frames:v', '1', '-q:v', '4', '-f', 'image2', 'pipe:1',
+  ], { encoding: 'buffer', maxBuffer: 10 * 1024 * 1024, timeout: 15000 }, (err, stdout) => {
+    if (err) return cb(err);
+    if (!stdout || !stdout.length) return cb(new Error('empty frame'));
+    cb(null, stdout);
+  });
+}
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, 'http://localhost');
+  if (url.pathname !== '/snapshot' || url.searchParams.get('key') !== SECRET) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+  grabSnapshot((err, buf) => {
+    if (err) {
+      console.error('grab failed:', err.message);
+      res.writeHead(502);
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Content-Length': buf.length });
+    res.end(buf);
+  });
+});
+server.listen(PORT, () => console.log('relay listening on :' + PORT));
+
+function registerUrl(tunnelUrl) {
+  const body = JSON.stringify({ camera: CAMERA_NAME, url: tunnelUrl, secret: SECRET });
+  const req = https.request(REGISTER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+  }, res => console.log('register ->', res.statusCode));
+  req.on('error', e => console.error('register failed:', e.message));
+  req.write(body);
+  req.end();
+}
+
+let heartbeat;
+function startTunnel() {
+  console.log('starting cloudflared...');
+  const proc = spawn(CLOUDFLARED_BIN, ['tunnel', '--url', 'http://localhost:' + PORT]);
+  let registered = false;
+  const onData = (data) => {
+    const text = data.toString();
+    process.stdout.write(text);
+    const m = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
+    if (m && !registered) {
+      registered = true;
+      console.log('tunnel URL:', m[0]);
+      registerUrl(m[0]);
+      clearInterval(heartbeat);
+      heartbeat = setInterval(() => registerUrl(m[0]), 4 * 60 * 1000);
+    }
+  };
+  proc.stdout.on('data', onData);
+  proc.stderr.on('data', onData); // cloudflared logs its URL to stderr
+  proc.on('exit', (code) => {
+    console.log('cloudflared exited, restarting in 5s...', code);
+    clearInterval(heartbeat);
+    setTimeout(startTunnel, 5000);
+  });
+}
+startTunnel();

@@ -1,0 +1,23 @@
+{
+  "name": "camera-reports",
+  "version": "1.0.0",
+  "description": "Standalone camera-based engagement/idle reporting — periodic frame capture, Claude vision classification, and a viewer UI.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "concurrently \"node server.js\" \"npm --prefix client run dev\"",
+    "build": "cd client && npm install --include=dev && npm run build",
+    "heroku-postbuild": "npm run build && node scripts/trim-onnx-platforms.js",
+    "prod": "npm run build && node server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
+    "concurrently": "^8.2.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "ffmpeg-static": "^5.3.0",
+    "mongodb": "^6.7.0",
+    "onnxruntime-node": "^1.29.0"
+  }
+}
