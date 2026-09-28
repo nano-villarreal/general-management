@@ -51,6 +51,15 @@
 //      registration and snapshot requests, this server to verify them).
 //   3. Set up the relay device per docs/camera-relay.md.
 //
+// OPTION C — push relay (recommended; no inbound access to the LAN at all).
+// A small script on an always-on computer on the camera's LAN
+// (relay/push-relay.js) fetches JPEG snapshots from the DVR/NVR and uploads
+// them to this server; nothing on the LAN is ever reachable from outside.
+//   1. Set CAMERAS_CONFIG with push:<relay name> and the DVR channel:
+//      [{"name":"Camera 04","zone":"Workshop","push":"warehouse","channel":4}]
+//   2. Set CAMERA_RELAY_SECRET (shared with the relay).
+//   3. Install the relay per docs/camera-relay.md ("Push relay").
+//
 // Either way:
 //   - Set ANTHROPIC_API_KEY — required now, since every check needs a
 //     classification (no motion-only fallback).
@@ -439,32 +448,43 @@ async function classifyFrame(frame, zone, referenceSet = [], operatorContext = n
   }
 }
 
+// A failed grab writes a report instead of only logging server-side, so a
+// persistent failure is visible in the UI rather than just silently
+// producing no data.
+async function recordUnreachable(db, cam, message) {
+  await db.collection('camera_reports').insertOne({
+    camera: cam.name,
+    zone: cam.zone,
+    status: 'UNREACHABLE',
+    peopleCount: null,
+    engagedCount: null,
+    disengagedCount: null,
+    onPhoneCount: null,
+    visualCompletionPct: null,
+    note: null,
+    error: message,
+    changedSinceLastCheck: null,
+    frameId: null,
+    timestamp: new Date(),
+  });
+}
+
 async function checkCamera(db, cam) {
   let frame;
   try {
     frame = cam.relay ? await grabFrameViaRelay(db, cam.name) : await grabFrameWithRetry(cam.rtspUrl);
   } catch (err) {
-    // Still unreachable after retries — write a report instead of only
-    // logging server-side, so a persistent failure is visible in the UI
-    // rather than just silently producing no data.
-    await db.collection('camera_reports').insertOne({
-      camera: cam.name,
-      zone: cam.zone,
-      status: 'UNREACHABLE',
-      peopleCount: null,
-      engagedCount: null,
-      disengagedCount: null,
-      onPhoneCount: null,
-      visualCompletionPct: null,
-      note: null,
-      error: err.message,
-      changedSinceLastCheck: null,
-      frameId: null,
-      timestamp: new Date(),
-    });
+    // Still unreachable after retries.
+    await recordUnreachable(db, cam, err.message);
     return;
   }
+  await processFrame(db, cam, frame);
+}
 
+// Store + classify one frame, however it was obtained — grabbed by this
+// server (checkCamera) or pushed up by an on-site relay (see server.js
+// POST /api/camera-relay/push-frame).
+async function processFrame(db, cam, frame) {
   const prev = state.get(cam.name) || { frame: null };
   const changedSinceLastCheck = frameDiff(prev.frame, frame) >= MOTION_DIFF_THRESHOLD;
   state.set(cam.name, { frame });
@@ -562,6 +582,27 @@ function loadCameras() {
   }
 }
 
+// Push mode: an on-site relay (relay/push-relay.js) polls
+// GET /api/camera-relay/push-config about once a minute and uploads a frame
+// per camera every IDLE_THRESHOLD_MIN. This server never connects inward.
+// If a relay stops checking in, nothing would otherwise be written at all,
+// so the watcher records its cameras as UNREACHABLE — same as a failed grab.
+const PUSH_RELAY_STALE_MS = 10 * 60 * 1000;
+
+async function checkPushRelays(db, pushCams) {
+  const relayNames = [...new Set(pushCams.map(c => c.push))];
+  const relays = await db.collection('camera_relays').find({ _id: { $in: relayNames } }).toArray();
+  const lastSeen = new Map(relays.map(r => [r._id, r.lastSeenAt ? new Date(r.lastSeenAt).getTime() : 0]));
+  for (const cam of pushCams) {
+    const seen = lastSeen.get(cam.push) || 0;
+    if (Date.now() - seen <= PUSH_RELAY_STALE_MS) continue;
+    const message = seen
+      ? `Relay "${cam.push}" hasn't checked in for ${Math.round((Date.now() - seen) / 60000)} min — the on-site relay computer may be off, asleep, or offline`
+      : `Relay "${cam.push}" has never connected — set up the on-site relay (docs/camera-relay.md)`;
+    await recordUnreachable(db, cam, message);
+  }
+}
+
 function startCameraWatcher(db) {
   if (process.env.ENABLE_CAMERAS !== 'true') {
     console.log('[camera] ENABLE_CAMERAS not set — watcher disabled');
@@ -579,13 +620,18 @@ function startCameraWatcher(db) {
   const tick = () => {
     cleanupOldFrames(db).catch(err => console.error('[camera] cleanup failed:', err.message));
     if (!isWithinBusinessHours()) return; // outside business hours — no frame grab, no API call, no cost
-    cameras.forEach(cam => {
+    cameras.filter(cam => !cam.push).forEach(cam => {
       checkCamera(db, cam).catch(err => console.error(`[camera] ${cam.name} check failed:`, err.message));
     });
+    const pushCams = cameras.filter(cam => cam.push);
+    if (pushCams.length) checkPushRelays(db, pushCams).catch(err => console.error('[camera] push relay check failed:', err.message));
   };
   tick();
   setInterval(tick, periodMs);
   console.log(`[camera] watching ${cameras.length} camera(s), checking every ${IDLE_THRESHOLD_MIN} min, ${process.env.BUSINESS_HOURS_START || '07:45'}–${process.env.BUSINESS_HOURS_END || '18:00'} (${BUSINESS_HOURS_TZ}) only`);
 }
 
-module.exports = { startCameraWatcher, checkCamera, isWithinBusinessHours, reclassifyReport };
+module.exports = {
+  startCameraWatcher, checkCamera, processFrame, recordUnreachable, loadCameras,
+  isWithinBusinessHours, reclassifyReport, IDLE_THRESHOLD_MIN,
+};

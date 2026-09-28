@@ -61,7 +61,7 @@ all owned (read and written) by this app:
 |---|---|
 | `camera_reports` | `integrations/camera.js`, every check (full log, not just alerts) |
 | `idle_flags` | `integrations/camera.js`, when a check comes back IDLE |
-| `camera_relays` | `POST /api/camera-relay/register` — relay device self-registration |
+| `camera_relays` | `POST /api/camera-relay/register` (tunnel relay URL) and `GET /api/camera-relay/push-config` (push relay `lastSeenAt`) |
 | `camera_frames` (GridFS bucket, not a plain collection) | `integrations/camera.js`'s `storeFrame` — every check's frame, pruned after `FRAME_RETENTION_DAYS` (default 30) unless reference-marked |
 
 A `camera_reports` document looks like:
@@ -110,6 +110,14 @@ All routes require a valid session (`requireAuth`) unless noted.
 - `GET /api/idle-flags?limit=`
 
 **Camera relay** (not session-gated — `CAMERA_RELAY_SECRET`-gated instead)
+- `GET /api/camera-relay/push-config?relay=` — push relay check-in: which
+  cameras to capture, interval, business-hours flag (`X-Relay-Secret` header)
+- `POST /api/camera-relay/push-frame?relay=&camera=` — push relay uploads a
+  JPEG; classified asynchronously
+- `POST /api/camera-relay/push-error?relay=` — push relay reports a failed
+  snapshot → `UNREACHABLE` report
+- `GET /api/camera-relay/push-relay.js` — the relay script (no secrets; public)
+- `GET /api/camera-relay/install-mac?secret=&relay=` — pre-filled macOS installer
 - `GET /api/camera-relay/script?secret=&camera=` — serves the filled-in
   relay script for `wget`/`curl`
 - `POST /api/camera-relay/register` — relay self-registration
@@ -143,6 +151,13 @@ camera in `CAMERAS_CONFIG` (JSON array):
   a real, previously-confirmed failure mode (Android silently killing the
   whole relay process overnight with no crash log) and how to harden
   against it.
+
+- `{"name","zone","push":"<relay>","channel":N}` — **push relay**
+  (recommended): an on-site script uploads DVR/NVR JPEG snapshots, so
+  nothing on the LAN is exposed. One relay serves every channel of a DVR.
+  The watcher doesn't grab these cameras itself; it only marks them
+  `UNREACHABLE` when their relay hasn't checked in for 10 min. See
+  `docs/camera-relay.md` → "Push relay".
 
 `CAMERA_RELAY_RTSP_URL` is a single **global** env var giving the relay
 device the camera's LAN RTSP URL — it is not per-camera the way

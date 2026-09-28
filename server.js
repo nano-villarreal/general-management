@@ -3,9 +3,13 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const archiver = require('archiver');
 const { MongoClient, ObjectId, GridFSBucket } = require('mongodb');
-const { startCameraWatcher, reclassifyReport } = require('./integrations/camera');
+const {
+  startCameraWatcher, reclassifyReport, processFrame, recordUnreachable, loadCameras,
+  isWithinBusinessHours, IDLE_THRESHOLD_MIN,
+} = require('./integrations/camera');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -382,6 +386,102 @@ app.post('/api/camera-relay/register', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Push relay — on-site script uploads DVR snapshots (see relay/push-relay.js)
+// The relay only ever makes OUTBOUND requests to these routes; nothing on
+// the camera's LAN is reachable from outside. It authenticates with the
+// X-Relay-Secret header (CAMERA_RELAY_SECRET). Which cameras to capture, how
+// often, and whether it's business hours are all decided here, so changing
+// CAMERAS_CONFIG never requires touching the on-site machine.
+
+const RELAY_NAME_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+function relaySecretOk(given) {
+  const expected = process.env.CAMERA_RELAY_SECRET;
+  if (!expected || typeof given !== 'string') return false;
+  const a = Buffer.from(given), b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireRelaySecret(req, res, next) {
+  if (!relaySecretOk(req.get('X-Relay-Secret'))) return res.status(403).json({ error: 'Forbidden' });
+  if (!RELAY_NAME_RE.test(req.query.relay || '')) return res.status(400).json({ error: 'relay name required' });
+  next();
+}
+
+function pushCamerasFor(relay) {
+  return loadCameras().filter(c => c.push === relay);
+}
+
+app.get('/api/camera-relay/push-config', requireRelaySecret, async (req, res) => {
+  try {
+    const relay = req.query.relay;
+    await db.collection('camera_relays').updateOne(
+      { _id: relay },
+      { $set: { mode: 'push', lastSeenAt: new Date(), version: String(req.query.v || '') } },
+      { upsert: true }
+    );
+    res.json({
+      active: isWithinBusinessHours(),
+      intervalMin: IDLE_THRESHOLD_MIN,
+      cameras: pushCamerasFor(relay).map(c => ({ name: c.name, channel: c.channel })),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/camera-relay/push-frame', requireRelaySecret, express.raw({ type: 'image/jpeg', limit: '8mb' }), async (req, res) => {
+  const cam = pushCamerasFor(req.query.relay).find(c => c.name === req.query.camera);
+  if (!cam) return res.status(404).json({ error: 'Unknown camera for this relay' });
+  const frame = req.body;
+  if (!Buffer.isBuffer(frame) || frame.length < 3 || frame[0] !== 0xFF || frame[1] !== 0xD8) {
+    return res.status(400).json({ error: 'Body must be a JPEG (Content-Type: image/jpeg)' });
+  }
+  // Outside business hours: accept but don't classify — no API cost.
+  if (!isWithinBusinessHours()) return res.status(202).json({ ok: true, skipped: 'outside business hours' });
+  // Classification takes several seconds; acknowledge now, process after.
+  res.status(202).json({ ok: true });
+  processFrame(db, cam, frame).catch(err => console.error(`[camera] ${cam.name} pushed frame failed:`, err.message));
+});
+
+app.post('/api/camera-relay/push-error', requireRelaySecret, async (req, res) => {
+  try {
+    const cam = pushCamerasFor(req.query.relay).find(c => c.name === req.body?.camera);
+    if (!cam) return res.status(404).json({ error: 'Unknown camera for this relay' });
+    if (isWithinBusinessHours()) {
+      await recordUnreachable(db, cam, `Relay: ${String(req.body.error || 'snapshot failed').slice(0, 300)}`);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// The relay script itself holds no secrets (they live in the relay's local
+// config.json), so it's served openly; the installer and the relay's
+// self-update both fetch it from here.
+app.get('/api/camera-relay/push-relay.js', (req, res) => {
+  res.set('Content-Type', 'text/javascript');
+  res.sendFile(path.join(__dirname, 'relay', 'push-relay.js'));
+});
+
+// macOS installer, pre-filled with this server's URL, the relay secret and
+// the relay name: `curl -fsSL "<url>" | bash` on the on-site Mac. Prompts
+// for the DVR address/login locally — those never leave the Mac.
+app.get('/api/camera-relay/install-mac', (req, res) => {
+  if (!relaySecretOk(req.query.secret)) return res.status(403).send('Forbidden');
+  const relay = req.query.relay || 'warehouse';
+  if (!RELAY_NAME_RE.test(relay)) return res.status(400).send('Bad relay name');
+  // See the TLS note on /api/camera-relay/script above.
+  const serverUrl = `https://${req.get('host')}`;
+  const script = fs.readFileSync(path.join(__dirname, 'templates', 'install-push-relay-mac.sh'), 'utf8')
+    .replace('{{SERVER_URL}}', serverUrl)
+    .replace('{{SECRET}}', process.env.CAMERA_RELAY_SECRET)
+    .replace('{{RELAY_NAME}}', relay);
+  res.set('Content-Type', 'text/x-shellscript');
+  res.send(script);
 });
 
 // ── Static client + boot ───────────────────────────────────────────────────

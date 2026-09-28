@@ -1,4 +1,84 @@
-# Camera relay setup (an always-on phone on the camera's LAN)
+# Camera relay setup
+
+There are two relay designs. **Use the push relay** unless you have a reason
+not to.
+
+| | Push relay (recommended) | Tunnel relay (legacy) |
+|---|---|---|
+| Direction | Relay uploads frames to the server | Server fetches frames through a public tunnel to the relay |
+| Anything on the LAN reachable from the internet? | **No** | Yes — the relay's `/snapshot` endpoint, guarded by the shared secret |
+| Camera source | DVR/NVR JPEG snapshots (Hikvision/HiLook ISAPI), one relay for all channels | One RTSP camera per relay |
+| On-site software | Node.js + `curl` | Node.js + ffmpeg + cloudflared |
+| DVR/camera password stored on the server? | No — only on the relay machine | Yes (`CAMERA_RELAY_RTSP_URL`) |
+
+## Push relay (DVR/NVR, macOS)
+
+`relay/push-relay.js` runs on any always-on computer on the DVR's LAN. About
+once a minute it asks the server (`GET /api/camera-relay/push-config`)
+which cameras it serves, how often to capture, and whether it's business
+hours; every `IDLE_THRESHOLD_MIN` minutes during business hours it fetches
+each camera's JPEG from the DVR
+(`http://<dvr>/ISAPI/Streaming/channels/<N>01/picture`, HTTP digest auth)
+and uploads it (`POST /api/camera-relay/push-frame`). A failed snapshot is
+reported (`POST /api/camera-relay/push-error`) and shows up as an
+`UNREACHABLE` report; if the relay stops checking in for 10 minutes the
+server marks its cameras `UNREACHABLE` itself. All three routes
+authenticate with the `X-Relay-Secret` header.
+
+**Why snapshots and not RTSP:** Hikvision DVRs commonly stream H.265 without
+the parameter sets in the SDP, which ffmpeg can't decode from a cold start
+("PPS id out of range"). The ISAPI snapshot endpoint returns a ready JPEG
+and sidesteps that entirely.
+
+**Hikvision lockout:** the DVR locks an IP address out of RTSP/ISAPI for
+~30 minutes after about five failed logins (the web UI keeps working if it
+was already logged in, which makes this confusing). The installer tests the
+login exactly once, and the relay backs off for 30 minutes after a rejected
+login instead of retrying every round.
+
+### Server config
+
+1. `CAMERA_RELAY_SECRET` — a long random string.
+2. `CAMERAS_CONFIG` entries with `push` (the relay's name) and `channel`
+   (the DVR channel number):
+   ```json
+   [{"name":"Camera 04","zone":"Workshop","push":"warehouse","channel":4}]
+   ```
+   Adding/removing cameras later only needs this config var changed — the
+   relay picks it up within a minute.
+
+### Installing on a Mac
+
+1. Keep the Mac plugged in, on the same network as the DVR (Ethernet
+   preferred), lid open if it's a laptop.
+2. Install **Node.js** LTS from https://nodejs.org (the `.pkg`). Very old
+   macOS versions can't run current Node — the nodejs.org "previous
+   releases" page lists older installers; the relay only needs Node 10+.
+3. In Terminal, run the installer served by the app (it's pre-filled with
+   the server URL, secret and relay name):
+   ```
+   curl -fsSL "https://<app>/api/camera-relay/install-mac?secret=<CAMERA_RELAY_SECRET>&relay=warehouse" | bash
+   ```
+   It asks for the DVR address and login (stored only in
+   `~/camera-relay/config.json`, mode 600), tests one snapshot, installs a
+   launchd daemon (`/Library/LaunchDaemons/com.camerareports.push-relay.plist`
+   — starts at boot without anyone logging in, restarts if it dies), and
+   disables system sleep (`pmset sleep 0`, `autorestart 1`). It asks for
+   the Mac's admin password for those last two steps.
+4. Check it: `tail -f ~/camera-relay/relay.log` — within a minute of
+   business hours you should see `sent Camera 04 (ch 4, … bytes)` lines.
+
+Re-running the installer updates the script and replaces the config.
+Uninstall: `sudo launchctl unload /Library/LaunchDaemons/com.camerareports.push-relay.plist && sudo rm /Library/LaunchDaemons/com.camerareports.push-relay.plist && rm -rf ~/camera-relay`.
+
+The script has no npm dependencies and uses only `curl` besides Node, so
+it runs unchanged on Linux (e.g. a Raspberry Pi) — only the installer is
+macOS-specific; on Linux, write the same `config.json` by hand and run it
+under systemd.
+
+---
+
+# Tunnel relay (legacy: an always-on phone on the camera's LAN)
 
 Use this when the camera's network can't accept inbound connections (CGNAT,
 ISP firewall, etc. — see `integrations/camera.js`'s Option A vs B). An
