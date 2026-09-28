@@ -3,10 +3,12 @@ import { api } from './api';
 import CameraReportsPanel from './components/CameraReportsPanel';
 import LabelingPanel from './components/LabelingPanel';
 import RelaySetupButton from './components/RelaySetupButton';
+import RelaySetupPanel from './components/RelaySetupPanel';
 
 const TABS = [
   { key: 'reports', label: 'Reports' },
   { key: 'labeling', label: 'Labeling' },
+  { key: 'setup', label: 'Relay Setup' },
 ];
 
 function tabFromHash() {
@@ -95,7 +97,7 @@ export default function App() {
       </div>
       <div className="main-content">
         <div className="solo-panel">
-          {tab === 'labeling' ? <LabelingPanel /> : <CameraReportsPanel />}
+          {tab === 'labeling' ? <LabelingPanel /> : tab === 'setup' ? <RelaySetupPanel /> : <CameraReportsPanel />}
         </div>
       </div>
     </div>
