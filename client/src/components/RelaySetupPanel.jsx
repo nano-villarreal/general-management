@@ -121,6 +121,23 @@ export default function RelaySetupPanel() {
             </div>
           </Step>
 
+          <Step n="—" title="If the relay is on someone's personal laptop">
+            <div className="hint">
+              Nothing to do when Wi-Fi drops, the laptop sleeps, or it restarts — the relay retries every minute and
+              starts itself at boot. Frames resume on their own once it's back on the warehouse network.
+              <br />Leaving the warehouse? <b>Pause</b> it, so it doesn't try to log in to whatever device has the
+              DVR's address on another network:
+            </div>
+            <CopyBlock command="sudo launchctl unload -w /Library/LaunchDaemons/com.camerareports.push-relay.plist" />
+            <div className="hint"><b>Resume</b> when back at the warehouse:</div>
+            <CopyBlock command="sudo launchctl load -w /Library/LaunchDaemons/com.camerareports.push-relay.plist" />
+            <div className="hint">Stuck or unsure? <b>Restart</b> it, then check the last lines of its log:</div>
+            <CopyBlock command="sudo launchctl kickstart -k system/com.camerareports.push-relay" />
+            <CopyBlock command="tail -n 20 ~/camera-relay/relay.log" />
+            <div className="hint">The installer turned off sleep. To put the laptop's normal sleep settings back:</div>
+            <CopyBlock command="sudo pmset restoredefaults" />
+          </Step>
+
           <Step n="—" title="If you ever need to stop or remove it">
             <CopyBlock command="sudo launchctl unload /Library/LaunchDaemons/com.camerareports.push-relay.plist" />
             <CopyBlock command="sudo rm /Library/LaunchDaemons/com.camerareports.push-relay.plist && rm -rf ~/camera-relay" />
