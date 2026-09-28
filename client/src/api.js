@@ -32,6 +32,9 @@ export const api = {
   }),
   labelExportUrl: '/api/labeling/export',
 
+  relaySetup: () => apiFetch('/api/relay-setup'),
+  claimRelayCommand: () => apiFetch('/api/relay-setup/claim', { method: 'POST' }),
+
   alerts: (limit = 40) => apiFetch(`/api/alerts?limit=${limit}`),
   idleFlags: (limit = 20) => apiFetch(`/api/idle-flags?limit=${limit}`),
 

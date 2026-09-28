@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api } from './api';
 import CameraReportsPanel from './components/CameraReportsPanel';
 import LabelingPanel from './components/LabelingPanel';
+import RelaySetupButton from './components/RelaySetupButton';
 
 const TABS = [
   { key: 'reports', label: 'Reports' },
@@ -88,6 +89,7 @@ export default function App() {
           </nav>
         </div>
         <div className="topbar-right">
+          <RelaySetupButton />
           <button className="logout-btn" onClick={logout}>Logout</button>
         </div>
       </div>

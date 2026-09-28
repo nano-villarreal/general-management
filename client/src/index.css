@@ -263,6 +263,39 @@ html, body, #root {
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--orange); border-bottom-color: var(--orange); }
 
+/* ── One-time relay command reveal ───────────────────────────────────────── */
+.relay-reveal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 16px;
+}
+.relay-reveal-box {
+  width: 640px;
+  max-width: 100%;
+  background: var(--bg1);
+  border: 1px solid var(--orange);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.relay-reveal-box textarea {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 8px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border2);
+  resize: none;
+  word-break: break-all;
+}
+
 /* ── Login ──────────────────────────────────────────────────────────────── */
 .login-page {
   height: 100vh;

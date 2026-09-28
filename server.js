@@ -484,6 +484,42 @@ app.get('/api/camera-relay/install-mac', (req, res) => {
   res.send(script);
 });
 
+// ── One-time relay install command ─────────────────────────────────────────
+// A logged-in admin can reveal the full, pre-filled relay install command
+// (secret included) exactly once, so it can be copy-pasted on the on-site
+// machine instead of hand-typed. After that the button is gone for good; to
+// get it back, delete the `relay_install_command` doc from `app_state`
+// (ideally after rotating CAMERA_RELAY_SECRET).
+
+const RELAY_CLAIM_ID = 'relay_install_command';
+
+app.get('/api/relay-setup', requireAuth, async (req, res) => {
+  try {
+    const claimed = await db.collection('app_state').findOne({ _id: RELAY_CLAIM_ID });
+    res.json({ available: !!process.env.CAMERA_RELAY_SECRET && !claimed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/relay-setup/claim', requireAuth, async (req, res) => {
+  try {
+    if (!process.env.CAMERA_RELAY_SECRET) return res.status(404).json({ error: 'CAMERA_RELAY_SECRET is not configured' });
+    try {
+      // Unique _id makes this atomic: a second click (or tab) gets 410.
+      await db.collection('app_state').insertOne({ _id: RELAY_CLAIM_ID, claimedAt: new Date() });
+    } catch (err) {
+      if (err.code === 11000) return res.status(410).json({ error: 'The install command was already revealed' });
+      throw err;
+    }
+    // See the TLS note on /api/camera-relay/script above.
+    const url = `https://${req.get('host')}/api/camera-relay/install-mac?secret=${encodeURIComponent(process.env.CAMERA_RELAY_SECRET)}&relay=warehouse`;
+    res.json({ command: `curl -fsSL "${url}" -o install.sh && bash install.sh` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Static client + boot ───────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) => {

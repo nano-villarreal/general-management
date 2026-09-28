@@ -13,6 +13,9 @@ export default defineConfig({
   },
   build: {
     outDir: '../public',
+    // The on-site relay Mac runs macOS Sierra (Safari 12) — transpile syntax
+    // like ?. / ?? down so the app still loads there.
+    target: ['es2017', 'safari12'],
     emptyOutDir: true,
   },
 });
