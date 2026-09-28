@@ -4,12 +4,21 @@ import CameraReportsPanel from './components/CameraReportsPanel';
 import LabelingPanel from './components/LabelingPanel';
 import RelaySetupButton from './components/RelaySetupButton';
 import RelaySetupPanel from './components/RelaySetupPanel';
+import CommandsPanel from './components/CommandsPanel';
 
 const TABS = [
   { key: 'reports', label: 'Reports' },
   { key: 'labeling', label: 'Labeling' },
   { key: 'setup', label: 'Relay Setup' },
+  { key: 'commands', label: 'Commands' },
 ];
+
+const PANELS = {
+  reports: CameraReportsPanel,
+  labeling: LabelingPanel,
+  setup: RelaySetupPanel,
+  commands: CommandsPanel,
+};
 
 function tabFromHash() {
   const key = window.location.hash.replace('#', '');
@@ -77,6 +86,23 @@ export default function App() {
   }
 
   if (!me) return <div className="loading">Loading...</div>;
+  // The Commands page is public: it's for whoever keeps the relay laptop,
+  // who may not have the app password, and it holds no secrets.
+  if (!me.authenticated && tab === 'commands') {
+    return (
+      <div className="app-layout">
+        <div className="topbar">
+          <div className="topbar-logo">Camera Reports</div>
+          <div className="topbar-right">
+            <a className="logout-btn" style={{ textDecoration: 'none' }} href="#reports">Log in</a>
+          </div>
+        </div>
+        <div className="main-content">
+          <div className="solo-panel"><CommandsPanel /></div>
+        </div>
+      </div>
+    );
+  }
   if (!me.authenticated) return <LoginPage onLoggedIn={() => setMe({ authenticated: true })} />;
 
   return (
@@ -97,7 +123,7 @@ export default function App() {
       </div>
       <div className="main-content">
         <div className="solo-panel">
-          {tab === 'labeling' ? <LabelingPanel /> : tab === 'setup' ? <RelaySetupPanel /> : <CameraReportsPanel />}
+          {React.createElement(PANELS[tab])}
         </div>
       </div>
     </div>

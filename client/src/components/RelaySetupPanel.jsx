@@ -1,49 +1,11 @@
 import React, { useState } from 'react';
+import CopyBlock from './CopyBlock';
 
 // Step-by-step commands for installing the push relay on the on-site Mac
 // (docs/camera-relay.md → "Push relay"). Nothing here is secret: the
 // secret-bearing install command comes from the one-time
 // "Relay install command" button, and the installer file it downloads is
 // what step 4 runs.
-
-// Copy synchronously inside the click handler — old Safari (the relay Mac
-// runs Sierra) has no navigator.clipboard, and execCommand only works
-// during the user gesture.
-function copyText(text) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  ta.style.position = 'fixed';
-  ta.style.opacity = '0';
-  document.body.appendChild(ta);
-  ta.select();
-  let ok = false;
-  try { ok = document.execCommand('copy'); } catch (e) { /* fall through */ }
-  document.body.removeChild(ta);
-  if (!ok && navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text);
-    ok = true;
-  }
-  return ok;
-}
-
-function CopyBlock({ command }) {
-  const [state, setState] = useState(null);
-  return (
-    <div className="copy-block">
-      <code>{command}</code>
-      <button
-        className={`btn${state === 'ok' ? ' active' : ''}`}
-        onClick={() => {
-          setState(copyText(command) ? 'ok' : 'fail');
-          setTimeout(() => setState(null), 2000);
-        }}
-      >
-        {state === 'ok' ? 'Copied' : state === 'fail' ? 'Select + ⌘C' : 'Copy'}
-      </button>
-    </div>
-  );
-}
 
 function Step({ n, title, children }) {
   return (
@@ -121,21 +83,11 @@ export default function RelaySetupPanel() {
             </div>
           </Step>
 
-          <Step n="—" title="If the relay is on someone's personal laptop">
+          <Step n="—" title="Day-to-day: pause, resume, restart, check">
             <div className="hint">
-              Nothing to do when Wi-Fi drops, the laptop sleeps, or it restarts — the relay retries every minute and
-              starts itself at boot. Frames resume on their own once it's back on the warehouse network.
-              <br />Leaving the warehouse? <b>Pause</b> it, so it doesn't try to log in to whatever device has the
-              DVR's address on another network:
+              See the <a href="#commands" className="tag-blue">Commands</a> page — it opens without logging in, so
+              whoever keeps the relay laptop can use it directly.
             </div>
-            <CopyBlock command="sudo launchctl unload -w /Library/LaunchDaemons/com.camerareports.push-relay.plist" />
-            <div className="hint"><b>Resume</b> when back at the warehouse:</div>
-            <CopyBlock command="sudo launchctl load -w /Library/LaunchDaemons/com.camerareports.push-relay.plist" />
-            <div className="hint">Stuck or unsure? <b>Restart</b> it, then check the last lines of its log:</div>
-            <CopyBlock command="sudo launchctl kickstart -k system/com.camerareports.push-relay" />
-            <CopyBlock command="tail -n 20 ~/camera-relay/relay.log" />
-            <div className="hint">The installer turned off sleep. To put the laptop's normal sleep settings back:</div>
-            <CopyBlock command="sudo pmset restoredefaults" />
           </Step>
 
           <Step n="—" title="If you ever need to stop or remove it">
